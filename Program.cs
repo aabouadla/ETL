@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Windows.Forms;
+using System.Windows.Forms.DataVisualization.Charting;
 
 namespace ETL
 {
@@ -17,6 +20,7 @@ namespace ETL
         static readonly string AnalyzeURL = "https://cbrell.de/bwi403/demo/analyseWS.php?x={0};{1}";
         static readonly string InDataFile = Path.GetTempPath() + "ein.csv";
         static readonly string OutDataFile = Path.GetTempPath() + "aus.csv";
+        static readonly string OutChartPng = Path.GetTempPath() + "chart.png";
         static readonly CultureInfo Culture = CultureInfo.CreateSpecificCulture("en-US");
         enum Werttyp
         {
@@ -35,6 +39,7 @@ namespace ETL
         }
         #endregion
 
+        [STAThread]
         static void Main(string[] args)
         {
             Zeittyp zeittyp = Zeittyp.Standard;
@@ -47,7 +52,9 @@ namespace ETL
             Analyze(klimaWsListe, werttyp);
 
             // Extrahieren
-            Extract(klimaWsListe, zeittyp, werttyp); // Extract(); kann auch so sein, standard Werttyp ist Temperatur         
+            Extract(klimaWsListe, zeittyp, werttyp); // Extract(); kann auch so sein, standard Werttyp ist Temperatur        
+
+            HumidityChart(klimaWsListe);          
 
         }
 
@@ -278,6 +285,87 @@ namespace ETL
             return lsContent.Length;
         }
 
+        static void HumidityChart(List<KlimaWS> klimaWsListe)
+        {          
+            // https://www.nuget.org/packages/System.Windows.Forms.DataVisualization
+            Chart humidityChart = new Chart();
+
+            // leer
+            humidityChart.Series.Clear(); 
+            humidityChart.Legends.Clear();
+            // name & titel
+            Legend myLegend = humidityChart.Legends.Add("Diagramm zur Änderung der Luftfeuchtigkeit");
+            myLegend.Title = "Luftfeuchtigkeit für die kommenden nächsten Tage";
+
+            //define a set of colors to be used for sections
+            Color[] colors = new Color[] { Color.Blue, Color.Red, Color.Green };
+            
+            //use a Dictionary to keep iColor of each section
+            // key=sectionName, value=iColor (color index in our colors array)
+            var sectionColors = new Dictionary<string, int>();
+
+            humidityChart.ChartAreas[0].AxisX.LabelStyle.Format = "dd.MM.yy";
+            humidityChart.ChartAreas[0].AxisX.Title = "Zeit";
+            humidityChart.ChartAreas[0].AxisX.Interval = 1;
+            humidityChart.ChartAreas[0].AxisX.IntervalType = DateTimeIntervalType.Months;
+            humidityChart.ChartAreas[0].AxisX.IntervalOffset = 1;
+            humidityChart.ChartAreas[0].AxisX.Minimum = klimaWsListe.Min(d => d.Zeit).ToOADate();
+            humidityChart.ChartAreas[0].AxisX.Maximum = klimaWsListe.Max(d => d.Zeit).ToOADate();
+
+            humidityChart.ChartAreas[0].AxisY.LabelStyle.Format = "%.2f";
+            humidityChart.ChartAreas[0].AxisY.Title = "Luftfeuchte";
+            humidityChart.ChartAreas[0].AxisY.Interval = 0.5;
+            humidityChart.ChartAreas[0].AxisY.IntervalOffset = 0.5;
+            humidityChart.ChartAreas[0].AxisY.Minimum = Decimal.ToDouble(klimaWsListe.Min(d => d.Hum));
+            humidityChart.ChartAreas[0].AxisY.Maximum = Decimal.ToDouble(klimaWsListe.Max(d => d.Hum));
+
+            int i = 0;
+            //int iColor = -1, maxColor = -1;
+            foreach (KlimaWS klimaWs in klimaWsListe)
+            {
+                humidityChart.Series.Add("Series" + i);
+                humidityChart.Series[i].ChartType = SeriesChartType.Line;
+                humidityChart.Series[i].XValueType = ChartValueType.DateTime;
+                humidityChart.Series[i].YValueType = ChartValueType.Double;
+                humidityChart.Series[i].LegendText = Werttyp.Luftfeuchte.ToString();
+                humidityChart.Series[i].IsVisibleInLegend = true;
+                humidityChart.Series[i].Points.AddXY(klimaWs.Zeit, klimaWs.Hum);
+
+                //humidityChart.ChartAreas[0].AxisX.LabelStyle.Format = "{F2}";
+
+
+                //for (int j = 0; j < klimaWs.Hum; j++)
+                //{
+                //    int k = humidityChart.Series[i].Points.AddXY(klimaWs.Zeit, klimaWs.Hum);
+                //    //string curSection = rr.section[j];
+                //    //if (sectionColors.ContainsKey(curSection))
+                //    //{
+                //    //    iColor = sectionColors[curSection];
+                //    //}
+                //    //else
+                //    //{
+                //    //    maxColor++;
+                //    //    iColor = maxColor; sectionColors[curSection] = iColor;
+                //    //}
+                //    humidityChart.Series[i].Points[k].Color = colors[iColor];
+                //}
+
+                //series#
+                i++; 
+
+            }
+
+            ////fill custom legends based on sections/colors
+            //foreach (var x in sectionColors)
+            //{
+            //    string section = x.Key;
+            //    iColor = x.Value;
+            //    myLegend.CustomItems.Add(colors[iColor], section); //new LegendItem()
+            //}
+
+           
+            //humidityChart.SaveImage(OutChartPng, ChartImageFormat.Png);
+        }
         #endregion
 
     }
